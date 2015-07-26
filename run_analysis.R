@@ -14,12 +14,12 @@
 ## (...)
 ##
 ## You should create one R script called run_analysis.R that does the following.
-## Merges the training and the test sets to create one data set.
-## Extracts only the measurements on the mean and standard deviation for each measurement.
-## Uses descriptive activity names to name the activities in the data set
-## Appropriately labels the data set with descriptive variable names.
-## From the data set in step 4, creates a second, independent tidy data set with the average
-## of each variable for each activity and each subject.
+## 1. Merges the training and the test sets to create one data set.
+## 2. Extracts only the measurements on the mean and standard deviation for each measurement.
+## 3. Uses descriptive activity names to name the activities in the data set
+## 4. Appropriately labels the data set with descriptive variable names.
+## 5. From the data set in step 4, creates a second, independent tidy data set with the average
+##    of each variable for each activity and each subject.
 ##
 
 ## Package dependencies
@@ -37,6 +37,9 @@ fileURL <-
 
 # Downloaded file name (with timestamp)
 fName <- paste(tstamp,"_data.zip", sep = "")
+
+# New (summarised) dataset stored on Assignment Step's 5
+outputFileName <- paste(tstamp,"_summarised.txt", sep = "")
 
 # Data directory
 dataPath <- "Data"
@@ -231,9 +234,6 @@ loadActivityNames <- function(dataPath, dataset) {
     dsActivity[id,2]
   }
   
-  # Removing duplicated columns
-  dataset <- dataset[,!duplicated(colnames(dataset))]
-  
   # Creating a table dataframe from the dataframe
   tblDataset <- tbl_df(dataset)
   
@@ -246,6 +246,20 @@ loadActivityNames <- function(dataPath, dataset) {
   setwd(cdir)
   
   tblDataset
+}
+
+summarizeDataset <- function(tbl_dataset, outputFileName) {
+  
+  # Group dataset by subject and activity
+  grouped_dataset   <- group_by(tbl_dataset, subject, activity)
+  
+  # Summarised grouped dataset.
+  summarized_dataset <- summarise_each(grouped_dataset, funs(mean))
+  
+  cat("Writting file",outputFileName, "into", getwd(),"\n")
+  write.table(summarized_dataset,file=outputFileName, row.name=FALSE)
+  
+  summarized_dataset
 }
 
 ######
@@ -267,12 +281,17 @@ assignment <- function() {
   print(dsStats)
   
   cat("## Assignment Stage 3\n")
-  dataset <- loadFeatureNames("Data", dataset)
+  dataset <- loadFeatureNames(dataPath, dataset)
+  
+  # Intermediate Processing !!!!
+  # Removing duplicated columns
+  dataset <- dataset[,!duplicated(colnames(dataset))]
   
   cat("## Assignment Stage 4\n")
-  dataset <- loadActivityNames("Data", dataset)
+  dataset <- loadActivityNames(dataPath, dataset)
   
   cat("## Assignment Stage 5\n")
+  summarized_dataset <- summarizeDataset(dataset, outputFileName)
   
-  dataset
+  list(dataset = dataset ,summarized_dataset)
 }
