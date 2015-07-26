@@ -28,6 +28,19 @@ library(dplyr)
 
 ## Assigment Setup Data
 
+# If remote flag is enabled, it will download data file, expand it, and analyse the downloaded data. 
+# Otherwise, will use the data on the current directory, assuming that the following files / directories 
+# are on same directory as the R's script:
+#
+#  README.txt             (file)
+#  activity_labels.txt    (file)
+#  features.txt           (file)
+#  features_info.txt      (file)
+#  test                   (directory)
+#  train                  (directory)
+#
+remote   <- FALSE
+
 # Generate date/ time timestamp
 tstamp  <- format(Sys.time(), "%Y%m%d%H%M%S")
 
@@ -48,35 +61,60 @@ dataPath <- "Data"
 ## Clean up function
 ##
 cleanUp <- function(dataPath) {
-  cat("Clear last execution data.\n")
-  if (dir.exists(dataPath)) {
-    if (unlink(dataPath, recursive = TRUE, force = TRUE) != 0) {
-      warning("Unable to remove ",dataPath)
+  if (remote) {
+    cat("Clean last execution data.\n")
+    if (dir.exists(dataPath)) {
+      if (unlink(dataPath, recursive = TRUE, force = TRUE) != 0) {
+        warning("Unable to remove ",dataPath)
+      }
+    }
+  } else {
+    cat("Using local data. No cleaning is needed.\n")
+  }
+}
+
+#
+# Function that switches to the data directory (if remote flag is enabled) returning
+# the current directory.
+#
+changeToDataDir <- function(dataPath) {
+  cdir <- getwd()
+  if (remote) {
+    setwd(dataPath)
+    dirDataset <- "UCI HAR Dataset"
+    if (!dir.exists(dirDataset)) {
+      stop("Unable find directory ", dirDataset)
+    } else {
+      setwd(dirDataset)
     }
   }
+  cdir
 }
 
 ##
 ## Data downloading & extracting fuction
 ##
 gatherData <- function(url, fName, dataPath) {
-  # Download file
-  cat("Downloading file",fileURL, "as", fName,"\n")
-  if (download.file(fileURL, destfile = fName, method = "curl", quiet = TRUE) != 0) {
-    stop("Unable to download file.")
-  }
-  
-  # Create data dir
-  if (!dir.exists(dataPath)) {
-    dir.create(dataPath)
+  if (remote) {
+    # Download file
+    cat("Downloading file",fileURL, "as", fName,"\n")
+    if (download.file(fileURL, destfile = fName, method = "curl", quiet = TRUE) != 0) {
+      stop("Unable to download file.")
+    }
+    
+    # Create data dir
+    if (!dir.exists(dataPath)) {
+      dir.create(dataPath)
+    } else {
+      warning("Using existing data directory ", dataPath)
+    }
+    
+    ## Unzip downloaded file
+    cat("Unzipping file",fName, "into", dataPath,"Directory\n")
+    unzip(fName, exdir = dataPath)
   } else {
-    warning("Using existing data directory ", dataPath)
+    cat("Using local data at", getwd(),"\n")
   }
-  
-  ## Unzip downloaded file
-  cat("Unzipping file",fName, "into", dataPath,"\n")
-  unzip(fName, exdir = dataPath)
-  
 }
 
 ##
@@ -87,8 +125,6 @@ gatherData <- function(url, fName, dataPath) {
 ##   V1.. V561 features
 ##
 mergeDatasets <- function(dataPath) {
-  dsdir_test  <- "test"
-  dsdir_train <- "train"
   
   #Local Function to assemble a dataset
   assembleDataset <- function(datasetName) {
@@ -123,18 +159,13 @@ mergeDatasets <- function(dataPath) {
     dset
   }
   
-  # Store currect working directory
-  cdir <- getwd()
-  setwd(dataPath)
+  # Train & Test Data Directories
+  dsdir_test  <- "test"
+  dsdir_train <- "train"
   
-  dirDataset <- "UCI HAR Dataset"
-  
-  if (!dir.exists(dirDataset)) {
-    stop("Unable find directory ", dirDataset)
-  } else {
-    setwd(dirDataset)
-  }
-  
+  # Store currect working directory / change to data directory
+  cdir <- changeToDataDir(dataPath)
+    
   cat("Loading datasets from", getwd(),"\n")
   
   dstest  <- assembleDataset(dsdir_test)
@@ -157,6 +188,7 @@ mergeDatasets <- function(dataPath) {
 ## Extracts the Produces a Matrix with the Mean and Standard Deviation of the features.
 ##
 extractMeanAndStandardDeviation <- function(dataset) {
+  
   cat("Calculating Dataset Statistics\n")
   # Calc the Mean for the features
   dsMean  <- sapply(dataset,mean)
@@ -178,21 +210,15 @@ extractMeanAndStandardDeviation <- function(dataset) {
 ## Function that loads the features names into the dataset
 ##
 loadFeatureNames <- function(dataPath, dataset) {
-  cdir <- getwd()
-  setwd(dataPath)
   
-  dirDataset <- "UCI HAR Dataset"
+  # Store currect working directory / change to data directory
+  cdir <- changeToDataDir(dataPath)
   
-  if (!dir.exists(dirDataset)) {
-    stop("Unable find directory ", dirDataset)
-  } else {
-    setwd(dirDataset)
-  }
-  
-  cat("Loading features names from", getwd(),"\n")
+  featuresFileName <- "features.txt"
+  cat("Loading features names from", getwd(),"/", featuresFileName,"\n")
   
   # Loading Features
-  dsFeatures <- read.table("features.txt")
+  dsFeatures <- read.table(featuresFileName)
   
   # Creating Dataframe to hold subject and activity feature
   dsDum      <- data.frame(-2:-1,names(dataset)[1:2])
@@ -213,21 +239,15 @@ loadFeatureNames <- function(dataPath, dataset) {
 }
 
 loadActivityNames <- function(dataPath, dataset) {
-  cdir <- getwd()
-  setwd(dataPath)
   
-  dirDataset <- "UCI HAR Dataset"
+  # Store currect working directory / change to data directory
+  cdir <- changeToDataDir(dataPath)
   
-  if (!dir.exists(dirDataset)) {
-    stop("Unable find directory ", dirDataset)
-  } else {
-    setwd(dirDataset)
-  }
-  
-  cat("Loading activity names from", getwd(),"\n")
+  activitiesFileName <- "activity_labels.txt"
+  cat("Loading activity names from", getwd(),"/", activitiesFileName,"\n")
   
   # Loading Features
-  dsActivity <- read.table("activity_labels.txt")
+  dsActivity <- read.table(activitiesFileName)
   
   # Creating a local function to decode activity names
   activityName <- function(id) {
@@ -249,7 +269,6 @@ loadActivityNames <- function(dataPath, dataset) {
 }
 
 summarizeDataset <- function(tbl_dataset, outputFileName) {
-  
   # Group dataset by subject and activity
   grouped_dataset   <- group_by(tbl_dataset, subject, activity)
   
@@ -257,7 +276,7 @@ summarizeDataset <- function(tbl_dataset, outputFileName) {
   summarized_dataset <- summarise_each(grouped_dataset, funs(mean))
   
   cat("Writting file",outputFileName, "into", getwd(),"\n")
-  write.table(summarized_dataset,file=outputFileName, row.name=FALSE)
+  write.table(summarized_dataset,file = outputFileName, row.name = FALSE)
   
   summarized_dataset
 }
