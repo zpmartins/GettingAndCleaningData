@@ -24,6 +24,7 @@
 
 ## Package dependencies
 library(plyr)
+library(dplyr)
 
 ## Assigment Setup Data
 
@@ -170,6 +171,9 @@ extractMeanAndStandardDeviation <- function(dataset) {
   dsMeanAndStandardDeviation
 }
 
+##
+## Function that loads the features names into the dataset
+##
 loadFeatureNames <- function(dataPath, dataset) {
   cdir <- getwd()
   setwd(dataPath)
@@ -195,14 +199,53 @@ loadFeatureNames <- function(dataPath, dataset) {
   
   # Merging both vectores
   dsFeatures <- rbind(dsDum,dsFeatures)
-
+  
   # Setting dataset column's name
   colnames(dataset) <- dsFeatures$V2
   
   # Restore working directory
   setwd(cdir)
-
+  
   dataset
+}
+
+loadActivityNames <- function(dataPath, dataset) {
+  cdir <- getwd()
+  setwd(dataPath)
+  
+  dirDataset <- "UCI HAR Dataset"
+  
+  if (!dir.exists(dirDataset)) {
+    stop("Unable find directory ", dirDataset)
+  } else {
+    setwd(dirDataset)
+  }
+  
+  cat("Loading activity names from", getwd(),"\n")
+  
+  # Loading Features
+  dsActivity <- read.table("activity_labels.txt")
+  
+  # Creating a local function to decode activity names
+  activityName <- function(id) {
+    dsActivity[id,2]
+  }
+  
+  # Removing duplicated columns
+  dataset <- dataset[,!duplicated(colnames(dataset))]
+  
+  # Creating a table dataframe from the dataframe
+  tblDataset <- tbl_df(dataset)
+  
+  # Mutating Vales ( decoding to temp column, copy temp column to activity column, drop temp column )
+  tblDataset <- mutate(tblDataset, tactivity = activityName(activity))
+  tblDataset <- mutate(tblDataset, activity = tactivity)
+  tblDataset <- select(tblDataset,-tactivity)
+  
+  # Restore working directory
+  setwd(cdir)
+  
+  tblDataset
 }
 
 ######
@@ -227,6 +270,7 @@ assignment <- function() {
   dataset <- loadFeatureNames("Data", dataset)
   
   cat("## Assignment Stage 4\n")
+  dataset <- loadActivityNames("Data", dataset)
   
   cat("## Assignment Stage 5\n")
   
